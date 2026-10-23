@@ -1,0 +1,3514 @@
+{
+ "_about": "2026-10-22 规则枚举工作流（5 维度并行枚举 → 逐维批判 → 合并）的原始产出，共 66 条。index.html 的 RULES 已选择性并入其中约 21 条（改成模板文案、去掉与引擎宿主约束重复的 QC-01~04 / IM-14 / BL-10~12 / CB-05~06 等）；其余保留在此供参考。",
+ "conflictPolicy": "引擎按商品逐个求值，先收集所有命中规则，再按五层裁决：第一层硬性（priority 9–10：缺货 IM-14、命中 BL-12/CB-05/CB-06、超预算 PS-10/CB-03、求全新遇翻新 QC-11、慢发货诚实降级 IM-11）无条件生效；第二层宿主上限（QC-01/QC-02 的 min 截断与 feed layout 锁定）在所有规则应用之后再执行一次封顶，层级建议（layout）生效后以新 layout 的上限为准；第三层按 priority 高者赢，同一 path 的 set 以高优先级为准、max/min/add/push 按语义合并，同 priority 时 when 中 && 子句更多者（更具体）胜，仍相同则 comboRules 先于 rules、数组中靠后者覆盖靠前者。第四层注意力预算：price.emphasis + cta 等级（none0/link1/soft2/solid3/cta4）+ reasons.max 之和 >7 时，引擎从命中规则中 priority 最低者开始逐条回退其对 emphasis/cta/reasons.max 的抬升，直到 ≤7，硬性层的效果永不回退；第五层默认值：无规则触达的槽位沿用宿主默认（小卡/feed 无按钮、大卡文字链接 + Track price、价格 1 级、理由 1 条）。单槽位互斥由同一套机制保证：image.pill 与 aiLine 都是 set 语义、最终只留最高优先级那一句，badges 去重后再按宿主上限截断，Solid 类 CTA 在合并后若出现两个则只保留 primary。designRisk 为 override 的规则（IM-03、IM-04、RT-04、QC-10、CB-01、CB-02）默认照常生效，但引擎在「约束检查」面板逐条列出触发了哪条、违反了现网矩阵的哪一条（对话卡非命中态放 Solid/cta、大卡新增次动作、feed 放按钮），并给每条一个一键关闭开关；关闭后该规则视为未命中，其槽位回落到下一优先级规则或宿主默认，关闭状态随配置保存、不影响其他规则。",
+ "notes": "1) product.soldRecent（近 30 天销量数）：IM-01/BL-03/BL-05 的社证文案与 RT-07 的 Best seller badge 都依赖销量，现在只能写「Popular this month」占位，无法渲染「2.3k bought this month」或判断是否真算 best seller。2) product.warranty / product.returnable（保修与可退货，布尔或天数）：badges 列表里有 warranty 与 returns，但 schema 没有对应字段，规则只能「按宿主政策展示」；缺字段时翻新机的保修披露（原 RT-09）无法落地，returns badge 也可能对不可退商品误显。3) context.targetPrice 与 context.hostStore：命中/追踪态的 AI 行需要目标价才能写「$5.00 under your target」，比价行与购买链接需要宿主店名才能把「Buy at Walmart ↗」「$18 less than Walmart」从硬编码改成模板；顺带建议 product.stock 为确切数时允许 urgencyLine 写「Only 3 left」。",
+ "rules": [
+  {
+   "id": "PS-01",
+   "dimension": "价格敏感 / 预算",
+   "name": "价格优先·强档（画像≥70 或查询明示）",
+   "when": "user.priceSensitivity>=70 || query.cues.includes('cheap') || query.cues.includes('under') || query.intent==='deal'",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "deal"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "delivery"
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "price",
+      "reasons",
+      "badges",
+      "rating",
+      "social",
+      "urgencyLine",
+      "cta",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": 0.4
+    },
+    {
+     "path": "rank.weights.discount",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": -0.1
+    }
+   ],
+   "rationale": "画像≥70 或查询明说 cheap/under/deal 时当次意图最可信：价格 20 Bold 露划线价，理由价格与优惠为首，排序按价格和降幅靠前并压品牌；盯价入口不在此处理，由 QC-04 大卡基线统一提供。",
+   "designRisk": "ok",
+   "example": "priceSensitivity=85 搜 iphone，候选卡价格放大、划线价露出、第一条理由讲价并按价格从低到高排。"
+  },
+  {
+   "id": "PS-02",
+   "dimension": "价格敏感 / 预算",
+   "name": "价格敏感·中档",
+   "when": "user.priceSensitivity>=40 && user.priceSensitivity<70 && !query.cues.includes('cheap') && !query.cues.includes('under') && query.intent!=='deal'",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 1
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.discount",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "中档只做轻量倾斜：价格保住默认档、有 was 时露划线价，理由价格第一但不挤掉评价与参数，与强档互斥避免权重叠加。",
+   "designRisk": "ok",
+   "example": "priceSensitivity=55 搜 airpods，卡片只多了划线价、理由第一条讲价。"
+  },
+  {
+   "id": "PS-03",
+   "dimension": "价格敏感 / 预算",
+   "name": "价格不敏感·反向弱化",
+   "when": "user.priceSensitivity<40 && !query.cues.includes('cheap') && !query.cues.includes('under') && query.intent!=='deal'",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.price.compareLine",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "fit"
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "reasons",
+      "rating",
+      "price",
+      "badges",
+      "social",
+      "urgencyLine",
+      "cta",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": -0.2
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.1
+    },
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "不在意价格的用户看到 Save 标签与比价行只觉廉价：价格封顶 1 级、去省额与比价，位置让给参数/评价/适配理由，排序改口碑与品牌优先；不压到 0 以免与缺货灰价撞车。",
+   "designRisk": "ok",
+   "example": "priceSensitivity=20 搜 macbook pro，先列「M4 芯片 · 18 小时续航」和评分，价格 16 Bold 放下方且无 Save 标签。"
+  },
+  {
+   "id": "PS-04",
+   "dimension": "价格敏感 / 预算",
+   "name": "大降幅·百分比省额",
+   "when": "product.was!=null && product.dropPct>=20 && (user.priceSensitivity>=40 || query.cues.includes('cheap') || query.cues.includes('under') || query.intent==='deal')",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 3
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "pct"
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "price",
+      "g": "Price just dropped",
+      "c": ", below its usual price"
+     }
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "deal"
+    }
+   ],
+   "rationale": "降幅≥20% 时百分比比金额更有冲击力：价格 24 Bold 加 Save 标签，AI 行一句「刚降价」，预算 3+1+2=6；不再加图上 pill 避免三重强调。",
+   "designRisk": "ok",
+   "example": "was $129 现 $89 的耳机，24 号大价 + 划线价 + 「Save 31%」。"
+  },
+  {
+   "id": "PS-05",
+   "dimension": "价格敏感 / 预算",
+   "name": "小降幅·金额省额",
+   "when": "product.was!=null && product.dropPct>=5 && product.dropPct<20 && (user.priceSensitivity>=40 || query.cues.includes('cheap') || query.cues.includes('under') || query.intent==='deal')",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "amt"
+    }
+   ],
+   "rationale": "5%–19% 的降幅用「Save $40」比「Save 8%」更可感知，价格只升到 2 级，<5% 不打标签以免小便宜显得廉价。",
+   "designRisk": "ok",
+   "example": "$499 降到 $459 的 iPad，20 号价格 + 划线价 + 「Save $40」。"
+  },
+  {
+   "id": "PS-06",
+   "dimension": "价格敏感 / 预算",
+   "name": "30 天最低价",
+   "when": "product.lowest30 && (user.priceSensitivity>=40 || query.cues.includes('cheap') || query.cues.includes('under') || query.intent==='deal')",
+   "priority": 8,
+   "effects": [
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": "lowest30"
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "price",
+      "g": "Lowest in 30 days",
+      "c": ", a good time to buy"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    }
+   ],
+   "rationale": "「30 天最低」是价格敏感用户最信的单一信号：独占图上 pill 与 AI 行，价格升到 2 级，压过降幅与比价文案，只低于超预算提示。",
+   "designRisk": "ok",
+   "example": "搜 switch，某款今日 30 天最低，图上「Lowest in 30 days」pill，AI 行提示现在适合买。"
+  },
+  {
+   "id": "PS-07",
+   "dimension": "价格敏感 / 预算",
+   "name": "比其他店便宜",
+   "when": "product.cheaperThan!=null && product.cheaperThan.diff>=3 && product.cheaperThan.diff>=product.price*0.03 && (user.priceSensitivity>=40 || query.cues.includes('cheap') || query.cues.includes('under') || query.intent==='deal')",
+   "priority": 7,
+   "effects": [
+    {
+     "path": "slots.price.compareLine",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "price",
+      "g": "Cheapest across stores",
+      "c": ", checked today"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    }
+   ],
+   "rationale": "跨店比价是 Migoo 的差异化价值，差价≥$3 且≥3% 才开比价行与 AI 行结论；同为 30 天最低时让位给 PS-06。",
+   "designRisk": "ok",
+   "example": "某款比 Walmart 便宜 $18，价格下出现「$18 less than Walmart」，AI 行「Cheapest across stores, checked today」。"
+  },
+  {
+   "id": "PS-08",
+   "dimension": "价格敏感 / 预算",
+   "name": "有优惠券",
+   "when": "product.coupon!=null && (user.priceSensitivity>=40 || query.cues.includes('cheap') || query.cues.includes('under') || query.intent==='deal')",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "coupon"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "deal"
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "price",
+      "g": "Coupon available",
+      "c": ", lower at checkout"
+     }
+    }
+   ],
+   "rationale": "券是标价之外的隐藏便宜：badge 露券、理由加 deal、AI 行提示结账更低，优先级低于降幅、最低价、比价。",
+   "designRisk": "ok",
+   "example": "标价 $59 有 $10 券的键盘，带「Coupon」badge，AI 行「Coupon available, lower at checkout」。"
+  },
+  {
+   "id": "PS-09",
+   "dimension": "价格敏感 / 预算",
+   "name": "翻新机·统一披露",
+   "when": "product.refurb",
+   "priority": 8,
+   "effects": [
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "refurb"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "authentic"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "deal"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "price",
+      "g": "Refurbished",
+      "c": ", lower price, see condition"
+     }
+    }
+   ],
+   "rationale": "翻新披露不按画像开关：对所有人 badge 明示、评分常显、AI 行先说翻新再引导看成色，优先级压过所有社证文案；并入 RT-09（求稳用户翻新透明化），其 warranty badge 因 schema 无保修字段不保留。",
+   "designRisk": "ok",
+   "example": "搜 iphone 14 出现官翻机，即使 4.8 分 AI 行也写「Refurbished, lower price, see condition」而非 Top rated。"
+  },
+  {
+   "id": "PS-10",
+   "dimension": "价格敏感 / 预算",
+   "name": "超出预算上限",
+   "when": "user.budgetMax!=null && product.price>user.budgetMax",
+   "priority": 9,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "task",
+      "g": "Above your budget",
+      "c": ", track it for a drop"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": true,
+      "label": "Track price"
+     }
+    }
+   ],
+   "rationale": "超预算商品不用大价和 Save 催买，转成盯价任务：AI 行点明超预算、价格封顶 1 级、省额清空、露出 Track price（小卡/feed 由宿主上限收口），硬性级压过所有好价文案。",
+   "designRisk": "ok",
+   "example": "用户说「iphone under $700」，$749 的卡 AI 行「Above your budget, track it for a drop」，底部 Track price。"
+  },
+  {
+   "id": "PS-11",
+   "dimension": "价格敏感 / 预算",
+   "name": "在预算内（仅查询明说 under 时）",
+   "when": "user.budgetMax!=null && product.price<=user.budgetMax && query.cues.includes('under')",
+   "priority": 3,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "fit",
+      "g": "Within your budget",
+      "c": ", fits the limit you set"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    }
+   ],
+   "rationale": "查询明说 under $X 时命中预算是对这句话的直接回答：AI 行确认、价格升到 2 级；只在 under 线索下触发，优先级最低可被任何好价信号覆盖。",
+   "designRisk": "ok",
+   "example": "「iphone under $700」，$649 的卡 AI 行「Within your budget, fits the limit you set」。"
+  },
+  {
+   "id": "IM-01",
+   "dimension": "冲动 / 紧迫",
+   "name": "强冲动·画像层：热卖优先、理由一句",
+   "when": "user.impulsiveness>=70",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.3
+    },
+    {
+     "path": "rank.weights.discount",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.delivery",
+     "op": "add",
+     "value": 0.1
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "deal"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.social",
+     "op": "set",
+     "value": {
+      "show": true,
+      "text": "Popular this month"
+     }
+    }
+   ],
+   "rationale": "冲动型靠热卖与折扣下决定、不读参数：排序偏热卖/折扣/到货，标题一行、理由一句、显示评分与社证（有销量数时引擎替换为真实数字）。",
+   "designRisk": "ok",
+   "example": "冲动 85 搜 airpods，列表按热卖+折扣排序，每张卡一句理由、评分和「Popular this month」。"
+  },
+  {
+   "id": "IM-02",
+   "dimension": "冲动 / 紧迫",
+   "name": "强冲动·小卡升大卡",
+   "when": "user.impulsiveness>=70 && context.surface==='chat-small'",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    }
+   ],
+   "rationale": "小卡信息区放不下带价按钮和社证，切到 280 宽大卡让 IM-03 的 CTA 有位置；layout 只看用户与宿主、不看单品，避免同一列表混排。",
+   "designRisk": "ok",
+   "example": "冲动 80 的用户在对话里收到小卡列表，引擎建议改用大卡渲染同一批商品。"
+  },
+  {
+   "id": "IM-03",
+   "dimension": "冲动 / 紧迫",
+   "name": "强冲动·对话卡大按钮带价（需拍板）",
+   "when": "user.impulsiveness>=70 && (context.surface==='chat-small' || context.surface==='chat-big') && !product.hitTarget && product.stock!==0",
+   "priority": 7,
+   "effects": [
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "cta",
+      "label": "Buy Now",
+      "withPrice": true
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "price",
+      "cta",
+      "social",
+      "urgencyLine",
+      "reasons",
+      "rating",
+      "badges",
+      "taskEntry"
+     ]
+    }
+   ],
+   "rationale": "冲动型看到价就按、文字链接太弱：h48 带价大按钮紧贴价格之下一屏完成「价→按」，预算 2+4+1=7；超出对话卡非命中态只用文字链接的矩阵，需设计拍板。",
+   "designRisk": "override",
+   "example": "冲动 90 搜 switch oled，大卡价格下直接出现「Buy Now · $349」h48 按钮，理由只剩一句。"
+  },
+  {
+   "id": "IM-04",
+   "dimension": "冲动 / 紧迫",
+   "name": "中冲动大卡 / 强冲动 feed·浅蓝软按钮（需拍板）",
+   "when": "((user.impulsiveness>=40 && user.impulsiveness<70 && context.surface!=='chat-small') || (user.impulsiveness>=70 && context.surface==='feed')) && !product.hitTarget && product.stock!==0",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "soft",
+      "label": "Buy Now",
+      "withPrice": false
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 2
+    }
+   ],
+   "rationale": "中等冲动只升一档到浅蓝 Solid-2 不带价，强冲动落在 170 宽 feed 放不下 h48 也降到 soft；现网非命中大卡只用链接、feed 不放按钮，属超规范。",
+   "designRisk": "override",
+   "example": "冲动 55 的用户在大卡底部看到浅蓝「Buy Now」，冲动 85 的用户在 feed 看到同款。"
+  },
+  {
+   "id": "IM-05",
+   "dimension": "冲动 / 紧迫",
+   "name": "低冲动·反向弱化：去催促、让位理由",
+   "when": "user.impulsiveness<40",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "slots.social",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": -0.1
+    }
+   ],
+   "rationale": "慎重型反感催促：去紧迫行与社证、CTA 保持宿主默认、理由至少两句、排序偏评分；真实低库存与到货信息由 IM-10/IM-12 以更高优先级显示。",
+   "designRisk": "ok",
+   "example": "冲动 20 搜 robot vacuum，卡片无「Only a few left」、无社证，两句理由 + 蓝色「Buy at Walmart ↗」。"
+  },
+  {
+   "id": "IM-08",
+   "dimension": "冲动 / 紧迫",
+   "name": "强紧迫 / 查询带 fast·排序按到货速度",
+   "when": "user.urgency>=70 || query.cues.includes('fast')",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "rank.weights.delivery",
+     "op": "add",
+     "value": 0.5
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "delivery"
+    }
+   ],
+   "rationale": "急用户第一问是「什么时候到」：排序权重大幅偏向发货速度，delivery 推进理由优先级让每张卡先说到货时间。",
+   "designRisk": "ok",
+   "example": "搜「charger fast shipping」，次日达的排前，每张卡第一条理由是到货时间。"
+  },
+  {
+   "id": "IM-09",
+   "dimension": "冲动 / 紧迫",
+   "name": "强紧迫 × 次日达·AI 行承载到货时间",
+   "when": "(user.urgency>=70 || query.cues.includes('fast')) && product.deliveryDays<=1 && product.stock!==0",
+   "priority": 7,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "urgency",
+      "g": "Arrives by tomorrow",
+      "c": ", order today"
+     }
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "fastDelivery"
+    }
+   ],
+   "rationale": "急用户最重要的一句状态是到货时间：放进 AI 行并同步 fastDelivery 徽标，「by tomorrow」同时覆盖当日达与次日达，低库存行由 IM-12 走 urgencyLine 不重复。",
+   "designRisk": "ok",
+   "example": "紧迫 80 搜 printer ink，次日达的那款 AI 行「Arrives by tomorrow, order today」。"
+  },
+  {
+   "id": "IM-10",
+   "dimension": "冲动 / 紧迫",
+   "name": "中紧迫·灰色到货行，不占 AI 行",
+   "when": "user.urgency>=40 && user.urgency<70 && !query.cues.includes('fast') && product.deliveryDays<=2 && product.stock!==0",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "text": "Arrives within 2 days"
+     }
+    }
+   ],
+   "rationale": "中等紧迫不值得抢 AI 行，用灰色 urgencyLine 告知两天内到货即可，被低库存或慢发货以更高优先级覆盖。",
+   "designRisk": "ok",
+   "example": "紧迫 55 搜 desk lamp，两天内到的款评分下方多一行灰字「Arrives within 2 days」。"
+  },
+  {
+   "id": "IM-11",
+   "dimension": "冲动 / 紧迫",
+   "name": "强紧迫 × 慢发货·诚实降级、不推",
+   "when": "(user.urgency>=70 || query.cues.includes('fast')) && product.deliveryDays>=5 && context.surface!=='feed'",
+   "priority": 9,
+   "effects": [
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "text": "Arrives in 5+ days"
+     }
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "link",
+      "label": "Buy at Walmart ↗",
+      "withPrice": false
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.social",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    }
+   ],
+   "rationale": "急用户遇到 5 天以上才到的货强推只会换来退货：CTA 退回文字链接（压过所有按钮强化与组合规则）、去社证、理由一句并诚实标到货时间，视为硬性诚实状态；feed 由 IM-08 排序沉底。",
+   "designRisk": "ok",
+   "example": "紧迫 85 搜 tent，7 天到的只有「Buy at Walmart ↗」和灰字「Arrives in 5+ days」。"
+  },
+  {
+   "id": "IM-12",
+   "dimension": "冲动 / 紧迫",
+   "name": "低库存·稀缺提示（冲动或紧迫 ≥40）",
+   "when": "product.lowStock && product.stock!==0 && (user.impulsiveness>=40 || user.urgency>=40)",
+   "priority": 7,
+   "effects": [
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": "lowStock"
+    },
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "text": "Only a few left"
+     }
+    }
+   ],
+   "rationale": "真实低库存是最可信的「现在买」理由：图上 pill 给 lowStock、灰色紧迫行写库存（有确切数时替换为「Only 3 left」），慎重用户不触发、不做假稀缺。",
+   "designRisk": "ok",
+   "example": "冲动 60 看到仅剩 3 件的键盘，图左上「Low stock」pill，价格下灰字「Only 3 left」。"
+  },
+  {
+   "id": "IM-13",
+   "dimension": "冲动 / 紧迫",
+   "name": "大促期 × 冲动 ≥40·deal pill + 限时行",
+   "when": "context.campaign && user.impulsiveness>=40 && product.dropPct>=10 && product.stock!==0",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": "deal"
+    },
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "text": "Campaign price, limited time"
+     }
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "pct"
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    }
+   ],
+   "rationale": "大促期对冲动型的触发点是「错过就没」：降幅≥10% 的商品 deal pill、限时行、价格至少 2 档带百分比 Save；pill 冲突时让位给低库存与 30 天最低。",
+   "designRisk": "ok",
+   "example": "双 11 冲动 65 搜 sneakers，降价 25% 的款图上「Deal」pill、20 号价 + 「-25%」、灰字「Campaign price, limited time」。"
+  },
+  {
+   "id": "IM-14",
+   "dimension": "冲动 / 紧迫",
+   "name": "缺货·硬状态：无 CTA、价格置灰、Notify",
+   "when": "product.stock===0 && context.surface!=='feed'",
+   "priority": 10,
+   "effects": [
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": "",
+      "withPrice": false
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": true,
+      "label": "Notify me when back"
+     }
+    },
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "slots.social",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": null
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 0
+    }
+   ],
+   "rationale": "缺货是压过所有画像的硬状态：无购买动作、价格置灰、去 pill/紧迫行/社证，任务入口换成「Notify me when back」；feed 缺货态按矩阵只有图上状态。",
+   "designRisk": "ok",
+   "example": "冲动 90 看中的游戏机 0 库存，卡片没有任何 Buy 按钮，价格灰色，底部「✦ Notify me when back」。"
+  },
+  {
+   "id": "RT-01",
+   "dimension": "研究型 / 求稳信任",
+   "name": "研究型·强：证据优先大卡",
+   "when": "user.researchDepth>=70 && context.surface!=='feed'",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 3
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "fit"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "reason",
+      "g": "Matches your key specs",
+      "c": ", details below"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 2
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "reasons",
+      "rating",
+      "social",
+      "price",
+      "urgencyLine",
+      "badges",
+      "cta",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.25
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "深度研究型靠参数和评价做决定：升大卡把三条理由和评分排在价格之前，价格封顶 2 级，购买入口沿用文字链接，排序偏高评分；预算 2+1+3=6。",
+   "designRisk": "ok",
+   "example": "researchDepth=85 搜「iphone 16 camera」，大卡 AI 行「Matches your key specs, details below」，先列三条理由再给价格。"
+  },
+  {
+   "id": "RT-02",
+   "dimension": "研究型 / 求稳信任",
+   "name": "研究型·中：两条理由加评分",
+   "when": "user.researchDepth>=40 && user.researchDepth<70 && context.surface!=='feed'",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.15
+    }
+   ],
+   "rationale": "中等研究型要看一点依据但不想读长卡：两条理由与评分即可，不换宿主、不动价格与 CTA、不占 AI 行。",
+   "designRisk": "ok",
+   "example": "researchDepth=55 搜 wireless earbuds，小卡加评分行与一条参数理由（小卡上限由 QC-01 裁掉第二条）。"
+  },
+  {
+   "id": "RT-03",
+   "dimension": "研究型 / 求稳信任",
+   "name": "研究型·弱：反向精简理由",
+   "when": "user.researchDepth<40",
+   "priority": 3,
+   "effects": [
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "deal"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "delivery"
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 1
+    }
+   ],
+   "rationale": "不做研究的用户不读理由列表：理由最多一条且换成价格/优惠/配送这类直接可感的，标题压回一行。",
+   "designRisk": "ok",
+   "example": "researchDepth=20 随手搜 phone case，卡片只留一条「Free shipping」理由。"
+  },
+  {
+   "id": "RT-04",
+   "dimension": "研究型 / 求稳信任",
+   "name": "对比意图：比价行加 Compare 次链接（需拍板）",
+   "when": "(query.intent==='compare' || query.cues.includes('compare')) && context.surface!=='feed'",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.price.compareLine",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "link",
+      "label": "Compare"
+     }
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "对比意图下用户要并排看参数与价格：大卡 + 比价行 + 参数优先理由，底部加「Compare」文字次链接；现网大卡次动作为空，属新增入口需拍板。",
+   "designRisk": "override",
+   "example": "问「compare galaxy s24 and pixel 9」，两张大卡带比价行、评分和参数理由，Buy at Walmart ↗ 旁多一个 Compare。"
+  },
+  {
+   "id": "RT-05",
+   "dimension": "研究型 / 求稳信任",
+   "name": "求稳·强：正品保障包",
+   "when": "user.trustNeed>=70 && product.authentic",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "authentic"
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "returns"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "social",
+      "g": "Verified authentic",
+      "c": ", easy returns"
+     }
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "authentic"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "price",
+      "rating",
+      "social",
+      "badges",
+      "reasons",
+      "urgencyLine",
+      "cta",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.25
+    },
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "怕踩坑的用户最先确认正品与退货：AI 行承载正品状态，评分与 Authentic/Returns badge 紧跟价格，理由以正品/评价开头，购买入口不施压；returns 按宿主政策展示。",
+   "designRisk": "ok",
+   "example": "trustNeed=80 搜 airpods pro，正品卡 AI 行「Verified authentic, easy returns」，价格下跟评分与两个 badge。"
+  },
+  {
+   "id": "RT-06",
+   "dimension": "研究型 / 求稳信任",
+   "name": "求稳·基础层：评分常显加 Returns",
+   "when": "user.trustNeed>=40",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "returns"
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.15
+    }
+   ],
+   "rationale": "求稳≥40 的基础层只给轻量保障：评分常显 + Returns badge，不改 AI 行与结构；≥70 且正品时由 RT-05 叠加正品包。",
+   "designRisk": "ok",
+   "example": "trustNeed=55 搜 robot vacuum，卡片多一行「4.6 · 1.2k reviews」和 Returns badge。"
+  },
+  {
+   "id": "RT-07",
+   "dimension": "研究型 / 求稳信任",
+   "name": "高口碑社证：AI 行承载 Top rated",
+   "when": "(user.trustNeed>=40 || user.researchDepth>=40) && product.rating>=4.5 && product.reviews>=500",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "social",
+      "g": "Top rated",
+      "c": ", 500+ reviews"
+     }
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "bestSeller"
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "评分≥4.5 且评价≥500 是最硬的社证：升到 AI 行当头条并加 Best seller badge，文案用固定数值，具体分数由评分行承载。",
+   "designRisk": "ok",
+   "example": "trustNeed=60 搜 stand mixer，4.8 分 3.1k 评价的款 AI 行「Top rated, 500+ reviews」。"
+  },
+  {
+   "id": "RT-08",
+   "dimension": "研究型 / 求稳信任",
+   "name": "弱口碑兜底：不包装、靠退货与排序",
+   "when": "user.trustNeed>=40 && (product.rating<4.0 || product.reviews<50)",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.social.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "returns"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "authentic"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "delivery"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    }
+   ],
+   "rationale": "求稳用户面对低分或少评商品不做社证包装：隐藏购买人数行，理由避开评价改用正品/配送，评分照实显示，加大评分权重让其自然后移。",
+   "designRisk": "ok",
+   "example": "trustNeed=60 搜 usb-c hub，3.9 分商品不显示「bought this month」，理由改正品/配送，排序落后。"
+  },
+  {
+   "id": "RT-10",
+   "dimension": "研究型 / 求稳信任",
+   "name": "审慎型组合：研究高且求稳高",
+   "when": "user.researchDepth>=70 && user.trustNeed>=70 && context.surface!=='feed'",
+   "priority": 7,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 3
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "authentic"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "returns"
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 2
+    },
+    {
+     "path": "slots.cta.primary.kind",
+     "op": "set",
+     "value": "link"
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "rating",
+      "social",
+      "reasons",
+      "badges",
+      "price",
+      "urgencyLine",
+      "cta",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.1
+    },
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "研究 + 求稳同时高是最慢的决策者：大卡三条理由（评价→正品→参数），评分和 Returns 排在价格前，购买入口锁定文字链接压住其他维度的按钮；预算 2+1+3=6。",
+   "designRisk": "ok",
+   "example": "researchDepth=80、trustNeed=85 搜 baby monitor，大卡按 评分 → 三条理由 → Returns → 价格 → 文字链接排列。"
+  },
+  {
+   "id": "RT-12",
+   "dimension": "研究型 / 求稳信任",
+   "name": "feed 研究/求稳：一行社证一条参数",
+   "when": "context.surface==='feed' && (user.researchDepth>=60 || user.trustNeed>=60) && product.rating>=4.3 && product.reviews>=100",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "social",
+      "g": "Highly rated",
+      "c": ", 100+ reviews"
+     }
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    }
+   ],
+   "rationale": "feed 卡只有一行 AI 行、一条理由：研究/求稳用户把 AI 行给评分社证（仅≥4.3 且≥100 评价），理由留参数，评分行隐藏避免重复，不放按钮或入口。",
+   "designRisk": "ok",
+   "example": "trustNeed=70 刷 feed，4.8 分 2.1k 评价的推荐卡 AI 行「Highly rated, 100+ reviews」，理由「A17 chip, 128GB」。"
+  },
+  {
+   "id": "RT-13",
+   "dimension": "研究型 / 求稳信任",
+   "name": "求稳·弱：反向隐藏保障信息",
+   "when": "user.trustNeed<30",
+   "priority": 3,
+   "effects": [
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.social.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "price",
+      "reasons",
+      "urgencyLine",
+      "cta",
+      "badges",
+      "rating",
+      "social",
+      "taskEntry"
+     ]
+    }
+   ],
+   "rationale": "不怕踩坑的用户不需要评分和保障信息：隐藏评分与购买人数行，badge 下沉到 CTA 之后，注意力让给价格与购买入口。",
+   "designRisk": "ok",
+   "example": "trustNeed=15 的回头客搜 iphone，卡片不显示评分行，直接 价格 → 理由 → Buy at Walmart ↗。"
+  },
+  {
+   "id": "BL-01",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "品牌忠诚·中档起（≥40）排序偏向品牌",
+   "when": "!!query.brand && user.brandLoyalty>=40",
+   "priority": 3,
+   "effects": [
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    }
+   ],
+   "rationale": "查询有品牌且用户中度以上忠诚时，排序给品牌加权，理由先讲规格与口碑而不是便宜；≥70 由 BL-02/03 叠加。",
+   "designRisk": "ok",
+   "example": "brandLoyalty=55 搜 iphone 15 case，Apple 官方配件比同价第三方排前。"
+  },
+  {
+   "id": "BL-02",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "品牌忠诚·强（≥70）× 商品品牌命中",
+   "when": "user.brandLoyalty>=70 && product.brandMatch",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "fit",
+      "g": "Your go-to brand",
+      "c": ", matches what you searched"
+     }
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 1
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.cta.primary.withPrice",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "authentic"
+    }
+   ],
+   "rationale": "对强忠诚用户品牌本身就是购买理由：AI 行点明常买的牌子，价格封顶默认档、按钮不带价，品牌命中款再叠加 0.2 权重相当于加分。",
+   "designRisk": "ok",
+   "example": "brandLoyalty=85 的 Apple 用户搜 iphone，iPhone 15 卡 AI 行「Your go-to brand」，价格 16 Bold 无 Save 标签。"
+  },
+  {
+   "id": "BL-03",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "品牌忠诚·强 × 非品牌商品（反向弱化）",
+   "when": "user.brandLoyalty>=70 && !!query.brand && !product.brandMatch",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "social",
+      "g": "Top-rated alternative",
+      "c": ", if you're open to another brand"
+     }
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.social",
+     "op": "set",
+     "value": {
+      "show": true,
+      "text": "Popular this month"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    }
+   ],
+   "rationale": "忠诚用户看到非目标品牌时不靠价格硬推，用口碑和销量给换牌的理由，标题两行让他看清这是别的牌子。",
+   "designRisk": "ok",
+   "example": "brandLoyalty=80 搜 iphone，列表里的 Samsung S24 卡 AI 行「Top-rated alternative」，显示评分与月销。"
+  },
+  {
+   "id": "BL-04",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "品牌忠诚·弱（<40，反向：按价与评分比货）",
+   "when": "user.brandLoyalty<40",
+   "priority": 3,
+   "effects": [
+    {
+     "path": "rank.weights.brand",
+     "op": "min",
+     "value": 0.1
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.15
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": 0.1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    }
+   ],
+   "rationale": "不认牌子的用户按价格和评分比货：品牌权重压到 0.1，标题两行露出型号与规格而不是品牌名。",
+   "designRisk": "ok",
+   "example": "brandLoyalty=20 搜 wireless earbuds，高分平价的白牌排在 AirPods 前面。"
+  },
+  {
+   "id": "BL-05",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "新用户·信任铺垫",
+   "when": "user.segment==='new'",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "authentic"
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "returns"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.social",
+     "op": "set",
+     "value": {
+      "show": true,
+      "text": "Popular this month"
+     }
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "authentic"
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.25
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.15
+    }
+   ],
+   "rationale": "新用户对平台和 Migoo 都还没有信任：正品/退货徽章、评分和销量降低踩坑感，排序偏向被大众验证过的款。",
+   "designRisk": "ok",
+   "example": "新用户搜 iphone charger，卡片带 Authentic + Returns 徽章，显示评分和「Popular this month」。"
+  },
+  {
+   "id": "BL-06",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "VIP·弱化价格与紧迫感（反向）",
+   "when": "user.segment==='vip'",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "fastDelivery"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "delivery"
+    },
+    {
+     "path": "slots.cta.primary.withPrice",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "min",
+     "value": 0.3
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.delivery",
+     "op": "add",
+     "value": 0.2
+    }
+   ],
+   "rationale": "VIP 不靠省钱和只剩 3 件驱动：价格封顶默认档、去 Save 标签和紧迫行，理由与排序偏向品质和送达速度。",
+   "designRisk": "ok",
+   "example": "VIP 搜 iphone，256GB 高配版排前，卡片不显示 Save 12% 和 Only 3 left。"
+  },
+  {
+   "id": "BL-07",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "犹豫信号·浏览 2–4 次或弃购未降价",
+   "when": "!context.hasTask && !product.hitTarget && context.surface!=='feed' && ((context.viewedTimes>=2 && context.viewedTimes<5) || (context.cartAbandoned && product.dropPct<5))",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "task",
+      "g": "Still on your mind",
+      "c": ", I can track the price for you"
+     }
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": true,
+      "label": "Track price"
+     }
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "returns"
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    }
+   ],
+   "rationale": "反复看或加购后离开说明在等理由或等降价：不硬推而递上盯价入口并换大卡，同时常显评分、加 Returns 降低决策压力；并入 RT-11（求稳用户犹豫回访），其社证 AI 行由 RT-07 按口碑条件单独承载。",
+   "designRisk": "ok",
+   "example": "第 3 次看同一款 iPhone 15 且无盯价任务，大卡 AI 行「Still on your mind」，评分常显，底部 Track price。"
+  },
+  {
+   "id": "BL-08",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "反复浏览·强（≥5 次）推进决策",
+   "when": "context.viewedTimes>=5 && !context.hasTask && !product.hitTarget && context.surface!=='feed'",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "reason",
+      "g": "You keep coming back to this",
+      "c": ", still the best match"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": true,
+      "label": "Track price"
+     }
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "price",
+      "reasons",
+      "cta",
+      "taskEntry",
+      "rating",
+      "social",
+      "urgencyLine",
+      "badges"
+     ]
+    }
+   ],
+   "rationale": "看过五次以上已进入决策期：价格、两条理由和入口顶到前面帮他下决心，购买仍走文字链接不越规范；预算 2+1+2=5。",
+   "designRisk": "ok",
+   "example": "第 6 次看 iPhone 15，大卡 AI 行「You keep coming back to this」，价格 20 Bold，两条理由紧跟，底部 Track price。"
+  },
+  {
+   "id": "BL-09",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "弃购 × 已降价",
+   "when": "!context.hasTask && context.cartAbandoned && product.was!=null && product.dropPct>=5 && !product.hitTarget",
+   "priority": 7,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "price",
+      "g": "Dropped since you left it",
+      "c": ", lower than in your cart"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "pct"
+    },
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": "deal"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "deal"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    }
+   ],
+   "rationale": "弃购的最大阻力多半是价格，现在降了就直说，划线价和 Save 百分比把差值可视化；已在盯价的商品交给 BL-10 走状态位。",
+   "designRisk": "ok",
+   "example": "加购 iPhone 15 后离开，三天后降 8%，AI 行「Dropped since you left it」，显示 $869 划掉、$799 和 Save 8%。"
+  },
+  {
+   "id": "BL-10",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "追踪中·未命中（状态位化，弱化催单）",
+   "when": "context.hasTask && !product.hitTarget",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": "tracking"
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "task",
+      "g": "Tracking",
+      "c": " · alert at your target price"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": false,
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    }
+   ],
+   "rationale": "已在盯价说明用户在等目标价，卡片转为状态位：图上 Tracking、AI 行说明提醒条件，不再用理由和紧迫感催单；大卡入口由 BL-11 补回。",
+   "designRisk": "ok",
+   "example": "给 AirPods 设了 ≤$150 盯价，feed 卡图上 Tracking，AI 行「Tracking · alert at your target price」，没有按钮。"
+  },
+  {
+   "id": "BL-11",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "追踪中·未命中 × 大卡（Adjust target 入口）",
+   "when": "context.hasTask && !product.hitTarget && context.surface==='chat-big'",
+   "priority": 8,
+   "effects": [
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": true,
+      "label": "Adjust target"
+     }
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "link",
+      "label": "Buy at Walmart ↗",
+      "withPrice": false
+     }
+    }
+   ],
+   "rationale": "大卡有空间，按现网矩阵给 Adjust target 入口和文字链接购买，并以强档优先级把冲动维度升上来的按钮压回文字链接。",
+   "designRisk": "ok",
+   "example": "大卡追踪中：图上 Tracking，底部左 Buy at Walmart ↗、右 Adjust target。"
+  },
+  {
+   "id": "BL-12",
+   "dimension": "品牌忠诚 / 用户分层 / 历史行为",
+   "name": "命中·通用（AI 行承担状态，文字链接购买）",
+   "when": "product.hitTarget",
+   "priority": 9,
+   "effects": [
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": null
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "task",
+      "g": "Hit your target",
+      "c": ", under the price you set"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "link",
+      "label": "Buy at Walmart ↗",
+      "withPrice": false
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": false,
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    }
+   ],
+   "rationale": "命中是盯价闭环的终点：去 Tracking pill、AI 行承担命中状态、价格升一档，默认按小卡口径文字链接购买（预算 2+1+1=4）；大卡与 feed 的按钮升级由组合规则 CB-05/CB-06 处理。",
+   "designRisk": "ok",
+   "example": "小卡命中：AI 行 Hit your target，价格 20 Bold，右下 Buy at Walmart ↗。"
+  },
+  {
+   "id": "QC-01",
+   "dimension": "查询意图与宿主上下文",
+   "name": "小卡宿主上限",
+   "when": "context.surface==='chat-small'",
+   "priority": 10,
+   "effects": [
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.badges",
+     "op": "min",
+     "value": 2
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 2
+    },
+    {
+     "path": "slots.price.compareLine",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.social.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.taskEntry.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.cta.secondary.kind",
+     "op": "set",
+     "value": "none"
+    }
+   ],
+   "rationale": "小卡图 80px、信息区很窄：理由封顶 1 条、徽章封顶 2 个（数组 min 为截断）、价格最高 20 Bold，不放任务入口与次动作，社证与比价行让位给 AI 行；仅在 layout 仍为 chat-small 时生效，被建议升大卡后按大卡上限。",
+   "designRisk": "ok",
+   "example": "对话里搜 iphone case 返回小卡列表，每张只保留 1 条理由、2 个徽章，底部没有 Track price。"
+  },
+  {
+   "id": "QC-02",
+   "dimension": "查询意图与宿主上下文",
+   "name": "feed 宿主上限",
+   "when": "context.surface==='feed'",
+   "priority": 10,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "feed"
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.badges",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 2
+    },
+    {
+     "path": "slots.price.compareLine",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.taskEntry.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.social.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.cta.secondary.kind",
+     "op": "set",
+     "value": "none"
+    }
+   ],
+   "rationale": "feed 双列宽约 170 且不可切换布局：layout 锁死为 feed，理由 1 条、徽章 1 个、价格最高 20 Bold，不放比价行、任务入口与次动作，状态全靠图上 pill 与 AI 行。",
+   "designRisk": "ok",
+   "example": "Auto-task feed 里的追踪卡只显示标题、价格、AI 行和 1 个徽章。"
+  },
+  {
+   "id": "QC-03",
+   "dimension": "查询意图与宿主上下文",
+   "name": "小卡/feed 非命中不放按钮",
+   "when": "(context.surface==='chat-small'||context.surface==='feed') && !product.hitTarget",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.cta.primary.kind",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.cta.secondary.kind",
+     "op": "set",
+     "value": "none"
+    }
+   ],
+   "rationale": "CTA 矩阵基线：小卡整卡点进 PDP、feed 不放按钮，购买动作只在命中态出现；放在常规档，其他维度若要放按钮须更高优先级 + designRisk override 进入约束检查。",
+   "designRisk": "ok",
+   "example": "价格未命中目标的小卡不显示任何购买链接或按钮，点整卡进 PDP。"
+  },
+  {
+   "id": "QC-04",
+   "dimension": "查询意图与宿主上下文",
+   "name": "大卡非命中文字链接与 Track price 入口",
+   "when": "context.surface==='chat-big' && !product.hitTarget",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "link",
+      "label": "Buy at Walmart ↗",
+      "withPrice": false
+     }
+    },
+    {
+     "path": "slots.cta.secondary.kind",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": true,
+      "label": "Track price"
+     }
+    }
+   ],
+   "rationale": "CTA 矩阵基线：大卡默认态底部左侧蓝色文字链接、右侧 ✦ Track price，实心留给命中态；并入 PS-12（价格敏感/查询明示/超预算的盯价入口），因小卡与 feed 本就被 QC-01/02 收口，实际效果与本基线完全重合；追踪中由 BL-11 换成 Adjust target。",
+   "designRisk": "ok",
+   "example": "大卡默认态底部左侧「Buy at Walmart ↗」，右侧「✦ Track price」，无实心按钮。"
+  },
+  {
+   "id": "QC-05",
+   "dimension": "查询意图与宿主上下文",
+   "name": "送礼意图·口碑优先价格让位",
+   "when": "query.intent==='gift' || query.cues.includes('gift')",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "delivery"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.social.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "returns"
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "fastDelivery"
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "rating",
+      "social",
+      "reasons",
+      "price",
+      "badges",
+      "urgencyLine",
+      "cta",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.3
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.delivery",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.discount",
+     "op": "add",
+     "value": -0.2
+    }
+   ],
+   "rationale": "送礼看重「不出错」和「按时到」：评分、社证与送达理由前置，价格压回默认且不打 Save 标（折扣让礼物显得廉价），排序偏高评分高销量；预算 1+1+2=4。",
+   "designRisk": "ok",
+   "example": "搜「gift for mom」，卡片先出评分和「Well reviewed」理由，价格默认大小、无 Save 标，徽章 Returns / Fast delivery。"
+  },
+  {
+   "id": "QC-06",
+   "dimension": "查询意图与宿主上下文",
+   "name": "送礼/求最佳·高口碑 AI 行",
+   "when": "(query.intent==='gift' || query.cues.includes('gift') || query.cues.includes('best')) && product.rating>=4.5 && product.reviews>=200",
+   "priority": 6,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "social",
+      "g": "Highly rated",
+      "c": ", a safe choice"
+     }
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    }
+   ],
+   "rationale": "送礼与求最佳的用户最需要「选它不会错」的背书，AI 行用一句口碑承载，仅≥4.5 分且≥200 评论触发；并入 RT-14（问 best 的研究型结论），其理由与排序效果已由 QC-13 覆盖，价格类 AI 行可更高优先级覆盖。",
+   "designRisk": "ok",
+   "example": "搜「best wireless earbuds」，4.8 分 2.1k 评论的耳机 AI 行「Highly rated, a safe choice」。"
+  },
+  {
+   "id": "QC-07",
+   "dimension": "查询意图与宿主上下文",
+   "name": "送礼·口碑不足反向弱化",
+   "when": "(query.intent==='gift' || query.cues.includes('gift')) && (product.rating<4.0 || product.reviews<20)",
+   "priority": 8,
+   "effects": [
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.social.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "authentic"
+    }
+   ],
+   "rationale": "送礼场景下评分 <4.0 或评论 <20 的商品拿不出口碑背书：隐藏评分与社证、理由压到 1 条只讲正品/送达，避免用弱口碑替用户做礼物决定。",
+   "designRisk": "ok",
+   "example": "搜「gift for dad」里 3.8 分 12 条评论的商品不显示评分行和社证，只留 1 条正品理由。"
+  },
+  {
+   "id": "QC-08",
+   "dimension": "查询意图与宿主上下文",
+   "name": "浏览意图·发现阶段轻卡",
+   "when": "query.intent==='browse' && context.stage==='discover' && context.surface!=='feed'",
+   "priority": 3,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-small"
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "fit"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "price",
+      "rating",
+      "reasons",
+      "badges",
+      "cta",
+      "taskEntry",
+      "social",
+      "urgencyLine"
+     ]
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.3
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": -0.1
+    },
+    {
+     "path": "rank.weights.discount",
+     "op": "add",
+     "value": -0.1
+    }
+   ],
+   "rationale": "闲逛/发现阶段用户在扫视而非决策：换小卡一屏看更多款，价格与折扣反向弱化，理由只留 1 条讲「适合你」，排序按大众口碑；优先级最低，任何明确意图或商品状态都能盖过。",
+   "designRisk": "ok",
+   "example": "随口问「show me some iphone cases」，返回一组小卡，价格默认 16 Bold、无 Save 标、每张 1 条理由。"
+  },
+  {
+   "id": "QC-09",
+   "dimension": "查询意图与宿主上下文",
+   "name": "购买意图或决策阶段·减摩擦大卡",
+   "when": "(query.intent==='buy' || context.stage==='decide') && context.surface!=='feed'",
+   "priority": 7,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "delivery"
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "freeShip"
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "fastDelivery"
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "link",
+      "label": "Buy at Walmart ↗",
+      "withPrice": true
+     }
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "price",
+      "aiLine",
+      "urgencyLine",
+      "badges",
+      "cta",
+      "reasons",
+      "rating",
+      "social",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.delivery",
+     "op": "add",
+     "value": 0.3
+    },
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": -0.1
+    }
+   ],
+   "rationale": "明确要买或已进决策阶段的用户只缺「确认」：大卡把价格、免邮/快送达徽章（按商品属性过滤）与带价文字链接集中在上半区，理由压到 1 条，仍用文字链接不越矩阵；预算 2+1+1=4。",
+   "designRisk": "ok",
+   "example": "说「buy iphone 15 128gb」，大卡价格 20 Bold 带划线价，徽章 Free shipping / Fast delivery，底部「Buy at Walmart · $799 ↗」。"
+  },
+  {
+   "id": "QC-10",
+   "dimension": "查询意图与宿主上下文",
+   "name": "决策阶段·反复回看实心按钮（需拍板）",
+   "when": "context.stage==='decide' && (context.viewedTimes>=3 || context.cartAbandoned) && context.surface==='chat-big' && !product.hitTarget && product.stock!==0",
+   "priority": 8,
+   "effects": [
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "solid",
+      "label": "Buy Now",
+      "withPrice": true
+     }
+    },
+    {
+     "path": "slots.cta.secondary.kind",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "reason",
+      "g": "Back for another look",
+      "c": ", ready when you are"
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    }
+   ],
+   "rationale": "决策阶段回看≥3 次或曾弃购的用户只差临门一脚：大卡用唯一一个实心 Buy Now 压缩路径、理由 1 条（预算 2+3+1=6）；超出「对话卡非命中只用文字链接」的矩阵，需拍板。",
+   "designRisk": "override",
+   "example": "第 3 次打开同一款 AirPods 的大卡，底部变为实心「Buy Now · $179」，AI 行「Back for another look, ready when you are」。"
+  },
+  {
+   "id": "QC-11",
+   "dimension": "查询意图与宿主上下文",
+   "name": "求全新·翻新品反向弱化",
+   "when": "query.cues.includes('new') && product.refurb",
+   "priority": 9,
+   "effects": [
+    {
+     "path": "slots.badges",
+     "op": "set",
+     "value": [
+      "refurb"
+     ]
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.aiLine.show",
+     "op": "set",
+     "value": false
+    },
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": null
+    }
+   ],
+   "rationale": "用户点名要全新品时翻新机不是正向结果：badges 用 set 清空只留 Refurbished 做提醒，不用 AI 行、不显示划线与省额、不放 pill，硬性级确保价格/紧迫维度不能把它包装成优惠。",
+   "designRisk": "ok",
+   "example": "搜「new iphone 14」混入翻新机，该卡只剩标题、默认价格和 Refurbished 徽章。"
+  },
+  {
+   "id": "QC-12",
+   "dimension": "查询意图与宿主上下文",
+   "name": "求二手·性价比优先",
+   "when": "query.cues.includes('used')",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": 0.3
+    },
+    {
+     "path": "rank.weights.discount",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": -0.1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "pct"
+    }
+   ],
+   "rationale": "找二手/翻新的用户核心诉求是同款更便宜且不踩坑：价格 20 Bold、省幅用百分比（was 存在时才渲染），理由先价格再评价，排序按价格与降幅、弱化品牌。",
+   "designRisk": "ok",
+   "example": "搜「used macbook air」，翻新款显示「$699 ~~$999~~ Save 30%」，理由「30% below new price」。"
+  },
+  {
+   "id": "QC-13",
+   "dimension": "查询意图与宿主上下文",
+   "name": "求最佳·口碑排序价格让位",
+   "when": "query.cues.includes('best')",
+   "priority": 5,
+   "effects": [
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.4
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.3
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": -0.2
+    },
+    {
+     "path": "rank.weights.discount",
+     "op": "add",
+     "value": -0.1
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.social.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "rating",
+      "social",
+      "reasons",
+      "price",
+      "badges",
+      "urgencyLine",
+      "cta",
+      "taskEntry"
+     ]
+    }
+   ],
+   "rationale": "问「最好的」是在求品质排序而非低价：评分与社证上移到价格之上，理由讲评价与规格，价格反向压回默认、不打折扣标，排序按评分与热度。",
+   "designRisk": "ok",
+   "example": "搜「best robot vacuum」，第一张卡评分与社证排在价格之上，价格默认 16 Bold。"
+  },
+  {
+   "id": "QC-14",
+   "dimension": "查询意图与宿主上下文",
+   "name": "评估阶段·大卡展开理由与比价",
+   "when": "context.stage==='evaluate' && context.surface!=='feed'",
+   "priority": 4,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.price.compareLine",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.1
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "评估阶段用户在权衡：换大卡放下 2 条理由、评分与比价行（仅 cheaperThan 存在时渲染），任务入口由 QC-04 大卡基线承接「再想想」；预算 1+1+2=4。",
+   "designRisk": "ok",
+   "example": "问「is this one worth it」，卡片切成大卡，2 条理由 + 比价行 + 底部「✦ Track price」。"
+  }
+ ],
+ "comboRules": [
+  {
+   "id": "CB-01",
+   "dimension": "组合：冲动 + 价格敏感",
+   "name": "强冲动 + 强价格敏感·价格 3 + Solid 带价（需拍板）",
+   "when": "user.impulsiveness>=70 && user.priceSensitivity>=70 && !product.hitTarget && product.stock!==0 && context.surface!=='feed' && (user.budgetMax==null || product.price<=user.budgetMax)",
+   "priority": 8,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 3
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "solid",
+      "label": "Buy Now",
+      "withPrice": true
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "price"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "deal"
+    },
+    {
+     "path": "slots.social",
+     "op": "set",
+     "value": {
+      "show": true,
+      "text": "Popular this month"
+     }
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "price",
+      "cta",
+      "social",
+      "reasons",
+      "urgencyLine",
+      "rating",
+      "badges",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.price",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "两维都高时预算只有 7：分配为价格 3（24 Bold + Save 标签）+ Solid h32 带价 3 + 理由 1，比 IM-03 的 h48 降一档但按钮再带一次价，更贴「便宜且马上买」；并入 PS-13（原封价格 2 级的方案弃用）、PS-14（好价才升大卡的条件简化为统一升大卡）与 IM-07；超预算时由 PS-10 接管不触发，仍属对话卡非命中态放 Solid 的超规范。",
+   "designRisk": "override",
+   "example": "冲动 80、价格敏感 85 搜 iphone 15，大卡 24 号大价 + Save $120，其下实心「Buy Now · $699」，理由只剩「Lowest in 30 days」。"
+  },
+  {
+   "id": "CB-02",
+   "dimension": "组合：研究型 + 冲动",
+   "name": "强研究 + 强冲动·证据在前、软按钮在后（需拍板）",
+   "when": "user.researchDepth>=70 && user.impulsiveness>=70 && !product.hitTarget && product.stock!==0 && context.surface!=='feed'",
+   "priority": 8,
+   "effects": [
+    {
+     "path": "layout",
+     "op": "set",
+     "value": "chat-big"
+    },
+    {
+     "path": "slots.title.lines",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 2
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "soft",
+      "label": "Buy Now",
+      "withPrice": false
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "reasons",
+      "rating",
+      "price",
+      "cta",
+      "social",
+      "urgencyLine",
+      "badges",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.popularity",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "研究型要三条理由、冲动型要大按钮，各退一步：理由 2 条放在价格之前满足「先看依据」，按钮降为浅蓝 soft 不带价放在价格之后承接「看完就买」，价格封顶 2 级，预算 2+2+2=6；覆盖 IM-03 的 h48 与 RT-01 的理由 3 条，仍属对话卡非命中态放按钮的超规范。",
+   "designRisk": "override",
+   "example": "researchDepth=80、impulsiveness=75 搜「iphone 16 camera」，大卡先列两条参数/评价理由与评分，价格 20 Bold，其下浅蓝「Buy Now」。"
+  },
+  {
+   "id": "CB-03",
+   "dimension": "组合：品牌忠诚 + 预算超出",
+   "name": "品牌命中但超预算·不催买、转盯价",
+   "when": "user.brandLoyalty>=70 && product.brandMatch && user.budgetMax!=null && product.price>user.budgetMax",
+   "priority": 9,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "task",
+      "g": "Your go-to brand, above your budget",
+      "c": ", track it for a drop"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "link",
+      "label": "Buy at Walmart ↗",
+      "withPrice": false
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": true,
+      "label": "Track price"
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "spec"
+    },
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "rank.weights.brand",
+     "op": "add",
+     "value": 0.1
+    }
+   ],
+   "rationale": "品牌忠诚想把它排前、预算超出又不该催买：排序保留品牌加分让它仍在视野里，但卡片走超预算口径——AI 行同时说明「常买的牌子」与「超预算」，价格 1 级、无 Save、无紧迫行、文字链接 + Track price，理由只留一条规格；预算 1+1+1=3，是所有组合里最克制的一条，优先级与 PS-10 同为硬性且更具体。",
+   "designRisk": "ok",
+   "example": "brandLoyalty=85 的 Apple 用户说「iphone under $700」，$749 的 iPhone 15 仍排前，AI 行「Your go-to brand, above your budget, track it for a drop」，底部 Track price。"
+  },
+  {
+   "id": "CB-04",
+   "dimension": "组合：送礼 + 紧迫",
+   "name": "送礼且急用·到货时间承载 AI 行、口碑托底",
+   "when": "(query.intent==='gift' || query.cues.includes('gift')) && (user.urgency>=70 || query.cues.includes('fast')) && product.deliveryDays<=1 && product.stock!==0 && product.rating>=4.3",
+   "priority": 8,
+   "effects": [
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "urgency",
+      "g": "Arrives by tomorrow",
+      "c": ", a well-rated pick"
+     }
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "fastDelivery"
+    },
+    {
+     "path": "slots.badges",
+     "op": "push",
+     "value": "returns"
+    },
+    {
+     "path": "slots.rating.show",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "set",
+     "value": 2
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "delivery"
+    },
+    {
+     "path": "slots.reasons.pick",
+     "op": "push",
+     "value": "review"
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.price.saveTag",
+     "op": "set",
+     "value": "none"
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "rating",
+      "reasons",
+      "price",
+      "badges",
+      "urgencyLine",
+      "cta",
+      "taskEntry"
+     ]
+    },
+    {
+     "path": "rank.weights.delivery",
+     "op": "add",
+     "value": 0.3
+    },
+    {
+     "path": "rank.weights.rating",
+     "op": "add",
+     "value": 0.2
+    },
+    {
+     "path": "rank.weights.discount",
+     "op": "add",
+     "value": -0.2
+    }
+   ],
+   "rationale": "送礼要「不出错」、急用要「赶得上」，两者都不靠价格：AI 行一句同时说到货与口碑（替换 IM-09 带催促感的「order today」），理由 2 条到货 + 评价，价格 1 级无 Save，CTA 沿用宿主默认文字链接；预算 1+1+2=4，排序送达与评分并重、压折扣。",
+   "designRisk": "ok",
+   "example": "搜「gift for dad fast」，次日达且 4.7 分的款 AI 行「Arrives by tomorrow, a well-rated pick」，徽章 Fast delivery / Returns，价格默认大小。"
+  },
+  {
+   "id": "CB-05",
+   "dimension": "组合：feed 宿主 + 命中",
+   "name": "feed 卡命中·Solid-2 Buy Now",
+   "when": "product.hitTarget && context.surface==='feed' && product.stock!==0",
+   "priority": 9,
+   "effects": [
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": null
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "task",
+      "g": "Hit your target",
+      "c": ", under the price you set"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "soft",
+      "label": "Buy Now",
+      "withPrice": false
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "none",
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": false,
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    }
+   ],
+   "rationale": "feed 是唯一命中态用 Solid-2 的宿主（现网 Auto-task 卡已有）：170 宽放不下 h32 实心，浅蓝 Buy Now 不带价，图上去 Tracking、AI 行承担命中状态；预算 2+2+1=5，徽章/理由仍受 QC-02 上限截断；并入 BL-14。",
+   "designRisk": "ok",
+   "example": "Watching Products feed 里 AirPods 命中，卡底浅蓝 Buy Now，AI 行 Hit your target，图上不再显示 Tracking。"
+  },
+  {
+   "id": "CB-06",
+   "dimension": "组合：已有任务 + 命中",
+   "name": "追踪任务命中 × 大卡·唯一允许的 Solid 带价",
+   "when": "product.hitTarget && context.surface==='chat-big' && product.stock!==0",
+   "priority": 9,
+   "effects": [
+    {
+     "path": "slots.image.pill",
+     "op": "set",
+     "value": null
+    },
+    {
+     "path": "slots.aiLine",
+     "op": "set",
+     "value": {
+      "show": true,
+      "kind": "task",
+      "g": "Hit your target",
+      "c": ", under the price you set"
+     }
+    },
+    {
+     "path": "slots.price.emphasis",
+     "op": "max",
+     "value": 2
+    },
+    {
+     "path": "slots.price.showWas",
+     "op": "set",
+     "value": true
+    },
+    {
+     "path": "slots.cta.primary",
+     "op": "set",
+     "value": {
+      "kind": "solid",
+      "label": "Buy Now",
+      "withPrice": true
+     }
+    },
+    {
+     "path": "slots.cta.secondary",
+     "op": "set",
+     "value": {
+      "kind": "link",
+      "label": "Keep watching"
+     }
+    },
+    {
+     "path": "slots.taskEntry",
+     "op": "set",
+     "value": {
+      "show": false,
+      "label": ""
+     }
+    },
+    {
+     "path": "slots.reasons.max",
+     "op": "min",
+     "value": 1
+    },
+    {
+     "path": "slots.urgencyLine",
+     "op": "set",
+     "value": {
+      "show": false,
+      "text": ""
+     }
+    },
+    {
+     "path": "order",
+     "op": "set",
+     "value": [
+      "title",
+      "aiLine",
+      "price",
+      "cta",
+      "reasons",
+      "rating",
+      "badges",
+      "social",
+      "urgencyLine",
+      "taskEntry"
+     ]
+    }
+   ],
+   "rationale": "盯价任务命中是对话卡唯一允许 Solid 的时刻：实心「Buy Now · $24.99」（管理卡已有同款带价文案）紧贴价格之下，灰字 Keep watching 做低承诺出口，理由收到一条、去紧迫行不叠加催促；预算 2+3+1=6；并入 BL-13（命中 × 大卡）与 IM-06（冲动 × 命中），对所有画像统一带价不再按冲动分档。",
+   "designRisk": "ok",
+   "example": "AirPods 跌到 $145 命中 $150 目标，大卡 AI 行 Hit your target，实心「Buy Now · $145」，右侧灰字 Keep watching。"
+  }
+ ]
+}
